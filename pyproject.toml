@@ -1,0 +1,20 @@
+[project]
+name = "aime-based-explanation-system-for-chatgpt-outputs"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13.3"
+dependencies = [
+    "chromadb>=1.0.6",
+    "gradio>=5.25.2",
+    "ipykernel>=6.29.5",
+    "langchain>=0.3.23",
+    "langchain-openai>=0.3.14",
+    "openai>=1.75.0",
+    "pip>=25.0.1",
+    "pypdf>=5.4.0",
+    "pypdf2>=3.0.1",
+    "setuptools>=79.0.0",
+    "tiktoken>=0.9.0",
+    "wheel>=0.45.1",
+]
