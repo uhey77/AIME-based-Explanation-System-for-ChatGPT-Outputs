@@ -9,6 +9,7 @@ dependencies = [
     "gradio>=5.25.2",
     "ipykernel>=6.29.5",
     "langchain>=0.3.23",
+    "langchain-community>=0.3.21",
     "langchain-openai>=0.3.14",
     "openai>=1.75.0",
     "pip>=25.0.1",
