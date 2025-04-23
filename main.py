@@ -1,5 +1,5 @@
 def main():
-    print("Hello from aime-based-explanation-system-for-chatgpt-outputs!")
+    print("Hello world")
 
 
 if __name__ == "__main__":
