@@ -24,20 +24,21 @@ import shutil
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+
 class Document:
     """ドキュメントを表すクラス"""
     def __init__(self, text, metadata):
         self.page_content = text
         self.metadata = metadata
 
+
 class AIExplanationSystem:
     """ChatGPTの出力説明システムのメインクラス"""
-    
-    def __init__(self, doc_directory="knowledge_base", 
-                 model_name="gpt-4", chunk_size=1000, chunk_overlap=100):
+
+    def __init__(self, doc_directory="knowledge_base", model_name="gpt-4", chunk_size=1000, chunk_overlap=100):
         """
         初期化メソッド
-        
+    
         Parameters:
         -----------
         doc_directory : str
@@ -53,34 +54,34 @@ class AIExplanationSystem:
         self.model_name = model_name
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        
+
         # サンプル文書を追加
         self._initialize_sample_docs()
-        
+
         # ナレッジベースの構築
         self.documents = self._load_documents()
         self.vector_db = self._create_vector_db()
-        
+
         # QAチェーンの構築
         self.qa_chain = self._create_qa_chain()
-        
+
         # 説明システム用のプロンプトテンプレート
         self.explanation_prompt = """
         以下の質問と回答を分析し、ChatGPTがこの回答を生成した理由や根拠を説明してください。
         回答と相関性の高い知識ベースの情報も引用してください。
-        
+
         ユーザーの質問: {question}
         ChatGPTの回答: {answer}
-        
+
         説明:
         """
-    
+
     def _initialize_sample_docs(self):
         """サンプル文書を追加する"""
         # ディレクトリが存在しない場合は作成
         if not os.path.exists(self.doc_directory):
             os.makedirs(self.doc_directory)
-            
+    
         # サンプル文書内容
         sample_docs = {
             "RAG_guide.txt": """# RAGの基礎ガイド
@@ -162,7 +163,7 @@ AIMEは、AI・機械学習モデルが特定の出力や判断を行った理�
 - マルチモーダル説明（テキスト・ビジュアル併用）
 """
         }
-        
+
         # サンプル文書をファイルに書き込む
         for filename, content in sample_docs.items():
             file_path = os.path.join(self.doc_directory, filename)
@@ -170,21 +171,21 @@ AIMEは、AI・機械学習モデルが特定の出力や判断を行った理�
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(content)
                 print(f"サンプル文書 '{filename}' を追加しました。")
-    
+
     def _load_documents(self) -> List[Document]:
         """ドキュメントの読み込み"""
         documents = []
-        
+
         # ディレクトリが存在しない場合は作成
         if not os.path.exists(self.doc_directory):
             os.makedirs(self.doc_directory)
             print(f"ディレクトリ '{self.doc_directory}' を作成しました。文書を追加してください。")
             return documents
-            
+
         for filename in os.listdir(self.doc_directory):
             file_path = os.path.join(self.doc_directory, filename)
             metadata = {'filename': filename}
-            
+
             # PDFファイルの処理
             if filename.endswith('.pdf'):
                 with open(file_path, 'rb') as f:
@@ -194,35 +195,35 @@ AIMEは、AI・機械学習モデルが特定の出力や判断を行った理�
                         page = pdf_reader.pages[page_num]
                         text += page.extract_text()
                     documents.append(Document(text, metadata))
-            
+
             # テキストファイルの処理
             elif filename.endswith('.txt'):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     text = f.read()
                     documents.append(Document(text, metadata))
-        
+
         print(f"ロードされたドキュメント数: {len(documents)}")
         return documents
-    
+
     def _create_vector_db(self):
         """ベクトルデータベースの作成"""
         if not self.documents:
             print("ドキュメントが存在しません。知識ベースを構築できません。")
             return None
-            
+
         # 文書の分割
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size, 
+            chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap
         )
         texts = text_splitter.split_documents(self.documents)
-        
+
         # ベクトルDBの作成
         embeddings = OpenAIEmbeddings()
         vector_db = Chroma.from_documents(texts, embeddings)
-        
+
         return vector_db
-    
+
     def _create_qa_chain(self):
         """質問応答チェーンの作成"""
         if not self.vector_db:
