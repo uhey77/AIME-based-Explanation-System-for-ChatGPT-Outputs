@@ -3,3 +3,4 @@
 
 # 仮想環境
 .venv
+.mypy_cache

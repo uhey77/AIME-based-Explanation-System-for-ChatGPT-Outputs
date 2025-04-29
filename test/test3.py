@@ -309,7 +309,7 @@ class EvaluationMetrics:
 class XAIMethodSelector:
     """XAI手法選択クラス"""
 
-    def __init__(self, model_name="gpt-4"):
+    def __init__(self, model_name="gpt-4.1-mini"):
         """
         初期化メソッド
 
