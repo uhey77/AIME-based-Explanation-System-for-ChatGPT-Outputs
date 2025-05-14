@@ -1,4 +1,4 @@
-# main.py
+# type: ignore
 import sys
 import config  # 環境変数を最初に読み込む
 from system import EnhancedAIExplanationSystem
@@ -8,6 +8,8 @@ from ui import create_gradio_interface
 def main():
     """メイン関数"""
     print("Enhanced AIME-based Explanation System for ChatGPT Outputs を起動中...")
+    print(f"アプリケーションバージョン: {config.APP_VERSION}")
+    print(f"説明モデル: {config.DEFAULT_MODEL_NAME}")
 
     try:
         # 設定値を config モジュールから取得してシステムを初期化
@@ -23,10 +25,13 @@ def main():
         demo = create_gradio_interface(system_instance)
 
         # Gradioアプリケーションを起動
-        # share=True はデプロイ環境に応じて設定
         print("Gradioインターフェースを起動します...")
-        # share=True は外部アクセスを許可する際に使用。セキュリティに注意。
-        demo.launch(share=False)  # ローカルでのみアクセスする場合は False
+        demo.queue()  # キューを有効にして処理順序を保証
+        demo.launch(
+            share=False,           # ローカルでのみアクセスする場合は False
+            show_api=False,        # APIエンドポイントを表示しない
+            show_error=True        # エラー詳細を表示する
+        )
 
     except ValueError as ve:  # APIキーがない場合など
         print(f"設定エラー: {ve}")
