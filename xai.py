@@ -1,18 +1,16 @@
-# xai.py
+# type: ignore
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
-# modelsモジュールからDocumentクラスをインポート
 from models import Document
-# configモジュールから設定値をインポート
 import config
 
 
 class XAIMethodSelector:
-    """XAI手法選択と説明生成クラス"""
+    """XAI手法選択と説明生成クラス（Qwen3風思考プロセス機能付き）"""
 
     def __init__(self, model_name: str = config.DEFAULT_MODEL_NAME):
         """
@@ -51,6 +49,7 @@ class XAIMethodSelector:
             6. アテンション可視化 - モデルが注目した情報を強調
             7. 局所的近似 - 複雑なモデルの決定を局所的に単純なモデルで近似
             8. 多角的説明 - 複数の説明手法を組み合わせて総合的に説明
+            9. Qwen3風思考プロセス - AIが自然な思考の流れを<think>タグで表示し、最終回答を出す
 
             回答形式:
             {{
@@ -72,7 +71,8 @@ class XAIMethodSelector:
             "プロセス追跡": self._generate_process_tracking_explanation,
             "アテンション可視化": self._generate_attention_visualization_explanation,
             "局所的近似": self._generate_local_approximation_explanation,
-            "多角的説明": self._generate_multi_faceted_explanation
+            "多角的説明": self._generate_multi_faceted_explanation,
+            "Qwen3風思考プロセス": self._generate_qwen3_thinking_process_explanation
         }
 
     def select_methods(self, question: str, answer: str, domain: str = "一般") -> Dict[str, Any]:
@@ -126,7 +126,7 @@ class XAIMethodSelector:
     def _default_method_selection(self, reason: str) -> Dict[str, Any]:
         """デフォルトのXAI手法選択結果を返す"""
         return {
-            "primary_method": "多角的説明",
+            "primary_method": "Qwen3風思考プロセス",  # デフォルトをQwen3風に変更
             "secondary_method": "プロセス追跡",
             "reasoning": f"エラーのため、デフォルトの手法を選択しました ({reason})。",
             "approach": "基本的な説明アプローチを適用します。"
@@ -159,14 +159,14 @@ class XAIMethodSelector:
             if method in self.method_implementations:
                 return self.method_implementations[method](question, answer, sources, **kwargs)
             else:
-                print(f"警告: 不明なXAI手法 '{method}' が指定されました。デフォルトのプロセス追跡を使用します。")
-                # デフォルトはプロセス追跡
-                return self._generate_process_tracking_explanation(question, answer, sources, **kwargs)
+                print(f"警告: 不明なXAI手法 '{method}' が指定されました。デフォルトのQwen3風思考プロセスを使用します。")
+                # デフォルトはQwen3風思考プロセス
+                return self._generate_qwen3_thinking_process_explanation(question, answer, sources, **kwargs)
         except Exception as e:
             print(f"'{method}' 説明生成中にエラーが発生しました: {e}")
             # エラー発生時はシンプルな説明を返すなど、フォールバック処理を行う
             return f"説明生成中にエラーが発生しました: {e}. デフォルトの説明を提供します。\n\n" + \
-                self._generate_process_tracking_explanation(question, answer, sources, **kwargs)
+                self._generate_qwen3_thinking_process_explanation(question, answer, sources, **kwargs)
 
     def _format_sources_text(self, sources: List[Document]) -> str:
         """ソースリストを整形するヘルパー関数"""
@@ -194,9 +194,40 @@ class XAIMethodSelector:
             print(f"LLMチェーン実行中にエラーが発生しました: {e}")
             return f"エラー: 説明生成中に問題が発生しました ({e})。"
 
-    # --- 個別の説明生成メソッド ---
-    # (元のコードから _generate_***_explanation メソッドをここに移動)
-    # 各メソッド内で _format_sources_text と _run_llm_chain を使用するように修正
+    # --- 新たに追加するQwen3風思考プロセス説明生成メソッド ---
+    def _generate_qwen3_thinking_process_explanation(self, question: str, answer: str, sources: List[Document], **kwargs) -> str:
+        """Qwen3風の思考プロセスによる説明を生成"""
+        prompt = PromptTemplate(
+            input_variables=["question", "answer", "sources"],
+            template="""
+            あなたは思考プロセスの可視化を得意とするAIアシスタントです。
+            以下のAI回答について、モデルが考えた思考プロセスを<think>タグで囲み、最後に最終回答を示してください。
+
+            ユーザーの質問: {question}
+            AIの回答: {answer}
+
+            参照情報:
+            {sources}
+
+            Qwen3風の思考プロセスとして以下のフォーマットで説明してください:
+
+            <think>
+            ここでは、回答に至るまでの思考過程を詳細に記述します。以下の点を自然な思考の流れで説明してください:
+            1. 質問の意図や要件の理解
+            2. 関連する情報源からの知識の抽出
+            3. 複数の視点からの検討
+            4. 論理的推論のステップ
+            5. 回答の妥当性評価
+            </think>
+
+            最終回答: （ここには元の回答をそのまま、または必要に応じて改善して記載）
+            """
+        )
+        sources_text = self._format_sources_text(sources)
+        inputs = {"question": question, "answer": answer, "sources": sources_text}
+        return self._run_llm_chain(prompt, inputs)
+
+    # --- 既存のXAI手法メソッド ---
 
     def _generate_feature_importance_explanation(self, question: str, answer: str, sources: List[Document], **kwargs) -> str:
         """特徴重要度分析による説明を生成"""
