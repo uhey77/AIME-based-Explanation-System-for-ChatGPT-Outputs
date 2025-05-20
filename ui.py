@@ -6,6 +6,9 @@ import time
 import traceback
 import gradio as gr
 from typing import Dict, Any, Optional, Tuple, List, Generator
+import base64
+from PIL import Image
+import io
 
 # 自作モジュールの追加
 from system import EnhancedAIExplanationSystem
@@ -48,10 +51,10 @@ def create_gradio_interface(system_instance: EnhancedAIExplanationSystem) -> gr.
         return explanation, explanation
 
     # チャットと説明を処理する関数
-    def process_chat_explain(question: str, domain: str = "一般") -> Tuple[str, str, str, str, str, str, str]:
+    def process_chat_explain(question: str, domain: str = "一般", generate_graph: bool = False) -> Tuple[str, str, str, str, str, str, str, Image.Image]:
         """チャットと説明を処理する関数"""
         if not question:
-            return ("質問を入力してください。", "", "N/A", "[]", "{}", "{}", "質問を入力してください。")
+            return ("質問を入力してください。", "", "N/A", "[]", "{}", "{}", "質問を入力してください。", None)
 
         try:
             # チャットと説明を実行
@@ -77,6 +80,39 @@ def create_gradio_interface(system_instance: EnhancedAIExplanationSystem) -> gr.
                 if total_time > 0:
                     status_message += f" 処理時間: {total_time:.2f}秒"
             
+            # グラフ生成
+            graph_image = None
+            if generate_graph:
+                status_message += " グラフを生成中..."
+                try:
+                    # 思考プロセスがあればそれを使用、なければ説明全体を使用
+                    thinking_process = result.get("thinking_process", "")
+                    text_for_graph = thinking_process if thinking_process else explanation
+                    
+                    # グラフを生成
+                    graph_result = system_instance.visualize_explanation_as_graph(
+                        explanation=text_for_graph,
+                        question=question,
+                        answer=answer
+                    )
+                    
+                    # base64エンコードされた画像をデコード
+                    img_base64 = graph_result.get('image_base64')
+                    if img_base64:
+                        img_data = base64.b64decode(img_base64)
+                        # 明示的にPILで開く際にエンコーディングを指定
+                        graph_image = Image.open(io.BytesIO(img_data))
+                        
+                        # グラフの指標情報を追加
+                        metrics = graph_result.get('metrics', {})
+                        status_message += f" グラフ生成完了 (ノード数: {metrics.get('node_count', 0)}, エッジ数: {metrics.get('edge_count', 0)})"
+                    else:
+                        status_message += " グラフ生成に失敗しました。"
+                except Exception as e:
+                    print(f"グラフ生成中にエラー: {e}")
+                    traceback.print_exc()  # スタックトレースを表示
+                    status_message += f" グラフ生成エラー: {e}"
+            
             # デバッグ出力
             print(f"回答: {answer[:100]}...")
             print(f"説明: {explanation[:100]}...")
@@ -85,7 +121,7 @@ def create_gradio_interface(system_instance: EnhancedAIExplanationSystem) -> gr.
             print(f"検証結果長さ: {len(verification)}")
             print(f"ステータス: {status_message}")
             
-            # 7つの値をタプルとして返す
+            # 8つの値をタプルとして返す (最後にグラフ画像を追加)
             return (
                 answer,           # answer_output
                 explanation,      # explanation_output
@@ -93,15 +129,16 @@ def create_gradio_interface(system_instance: EnhancedAIExplanationSystem) -> gr.
                 sources,          # sources_output (文字列化JSON)
                 verification,     # verification_output (文字列化JSON)
                 search_info,      # search_info_output (文字列化JSON)
-                status_message    # status_output
+                status_message,   # status_output
+                graph_image       # graph_output (PIL Image または None)
             )
         except Exception as e:
             tb_str = traceback.format_exc()
             error_message = f"エラーが発生しました: {e}\n{tb_str}"
             print(error_message)
             
-            # エラー時も7つの値を返す
-            return (error_message, error_message, "N/A", "[]", "{}", "{}", f"エラーが発生しました: {e}")
+            # エラー時も8つの値を返す
+            return (error_message, error_message, "N/A", "[]", "{}", "{}", f"エラーが発生しました: {e}", None)
 
     # 既存の回答に対する説明を生成する関数
     def generate_explanation(question: str, answer: str, domain: str = "一般") -> Generator[Tuple[str, str, str, str], None, None]:
@@ -173,6 +210,8 @@ def create_gradio_interface(system_instance: EnhancedAIExplanationSystem) -> gr.
                             label="ドメイン", 
                             value="一般"
                         )
+                        # グラフ生成オプションを追加
+                        generate_graph_checkbox = gr.Checkbox(label="思考プロセスをグラフ化", value=False)
                         submit_btn = gr.Button("送信", variant="primary")
                 
                 with gr.Row():
@@ -182,6 +221,10 @@ def create_gradio_interface(system_instance: EnhancedAIExplanationSystem) -> gr.
                         explanation_output = gr.Textbox(label="回答の説明", lines=8, interactive=False)
                 
                 method_output = gr.Textbox(label="使用されたXAI手法", interactive=False)
+                
+                # グラフ表示領域を追加
+                with gr.Row(visible=False) as graph_container:
+                    graph_output = gr.Image(label="思考プロセスグラフ", type="pil")
                 
                 # タブで詳細情報を表示
                 with gr.Tabs():
@@ -232,18 +275,18 @@ def create_gradio_interface(system_instance: EnhancedAIExplanationSystem) -> gr.
         # イベントの設定
         submit_btn.click(
             fn=process_chat_explain,
-            inputs=[question_input, domain_input],
+            inputs=[question_input, domain_input, generate_graph_checkbox],
             outputs=[
                 answer_output, explanation_output, method_output,
                 sources_output, verification_output, search_info_output,
-                status_output
+                status_output, graph_output
             ],
             api_name="chat_and_explain"
         ).then(
-            fn=lambda: None,
-            inputs=None,
-            outputs=None,
-            js="() => { console.log('処理が完了しました'); }"
+            # グラフが生成された場合は表示する
+            fn=lambda img: gr.update(visible=img is not None),
+            inputs=[graph_output],
+            outputs=[graph_container]
         )
         
         explain_btn.click(

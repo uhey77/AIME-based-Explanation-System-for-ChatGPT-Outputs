@@ -8,6 +8,7 @@ import shutil
 import csv
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from graph_visualization import ExplanationGraphVisualizer
 from langchain.chains import RetrievalQA
 from langchain_openai import ChatOpenAI
 from langchain_core.vectorstores import VectorStore
@@ -823,7 +824,7 @@ class EnhancedAIExplanationSystem:
             }
     
     def batch_process(self, questions: List[str], domain: str = "一般",
-                     output_format: str = "dict") -> Any:
+                    output_format: str = "dict") -> Any:
         """複数の質問をバッチ処理する
         
         Parameters:
@@ -916,3 +917,158 @@ class EnhancedAIExplanationSystem:
                 "average_processing_time": batch_processing_time / len(questions) if questions else 0,
                 "timestamp": datetime.now().isoformat()
             }
+    
+    def visualize_explanation_as_graph(self, explanation: str, question: str = None, answer: str = None, 
+                                save_path: str = None, return_base64: bool = True) -> Dict[str, Any]:
+        """
+        説明をグラフとして可視化する
+
+        Parameters:
+        -----------
+        explanation : str
+            説明テキスト（思考プロセスを含む）
+        question : str, optional
+            元の質問
+        answer : str, optional
+            最終的な回答
+        save_path : str, optional
+            グラフを保存するファイルパス
+        return_base64 : bool
+            True の場合、画像のbase64エンコードを返す
+
+        Returns:
+        --------
+        Dict[str, Any]
+            グラフの情報と画像データを含む辞書
+        """
+        print(f"説明のグラフ可視化を開始...")
+        
+        try:
+            # 可視化クラスのインスタンスを作成
+            visualizer = ExplanationGraphVisualizer()
+            
+            # ここから修正部分 -------------------------------------
+            # 思考プロセスがあればそれを使用、なければ説明全体を使用
+            thinking_process = ""
+            if "<think>" in explanation:
+                thinking_match = re.search(r'<think>(.*?)</think>', explanation, re.DOTALL)
+                if thinking_match:
+                    thinking_process = thinking_match.group(1).strip()
+            
+            text_for_graph = thinking_process if thinking_process and len(thinking_process) > 100 else explanation
+            
+            # 日本語テキストを適切に処理するための前処理
+            # 半角スペースの多重スペースを1つに
+            text_for_graph = re.sub(r' +', ' ', text_for_graph)
+            # 改行の正規化
+            text_for_graph = re.sub(r'\r\n', '\n', text_for_graph)
+            # 複数の改行を1つに
+            text_for_graph = re.sub(r'\n+', '\n', text_for_graph)
+            # ここまで修正部分 -------------------------------------
+            
+            # 説明からグラフを生成（修正: text_for_graphを使用）
+            graph = visualizer.create_explanation_graph(text_for_graph, question, answer)
+            
+            # グラフの指標を計算
+            metrics = visualizer.generate_graph_metrics(graph)
+            
+            # 結果を格納する辞書
+            result = {
+                'metrics': metrics,
+                'node_count': metrics['node_count'],
+                'edge_count': metrics['edge_count'],
+                'central_concepts': []
+            }
+            
+            # 中心的な概念を追加
+            if metrics.get('central_node'):
+                result['central_concepts'].append({
+                    'text': metrics['central_node'],
+                    'type': metrics['central_node_type']
+                })
+            
+            # save_pathが指定されている場合、画像を保存
+            if save_path:
+                # ディレクトリが存在しない場合は作成
+                os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+                
+                # グラフを画像として保存
+                title = f"Explanation Graph: {question[:30] + '...' if question and len(question) > 30 else question}"
+                visualizer.save_graph_as_image(graph, save_path, title)
+                result['image_path'] = save_path
+            
+            # base64エンコードされた画像を返すオプション
+            if return_base64:
+                title = f"Explanation Graph"
+                if question:
+                    title += f" for: {question[:30] + '...' if len(question) > 30 else question}"
+                
+                img_base64 = visualizer.render_graph_as_base64(graph, title)
+                result['image_base64'] = img_base64
+            
+            print(f"説明のグラフ可視化が完了しました。ノード数: {metrics['node_count']}, エッジ数: {metrics['edge_count']}")
+            return result
+            
+        except Exception as e:
+            print(f"説明のグラフ可視化中にエラーが発生しました: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'error': str(e),
+                'metrics': {},
+                'node_count': 0,
+                'edge_count': 0,
+                'central_concepts': []
+            }
+
+    def batch_visualization(self, explanation_records: List[Dict[str, Any]], output_dir: str = "explanation_graphs") -> List[Dict[str, Any]]:
+        """
+        複数の説明を一括でグラフ可視化する
+
+        Parameters:
+        -----------
+        explanation_records : List[Dict[str, Any]]
+            説明レコードのリスト（各レコードには 'question', 'answer', 'explanation' が含まれる）
+        output_dir : str
+            出力ディレクトリ
+
+        Returns:
+        --------
+        List[Dict[str, Any]]
+            各説明の可視化結果リスト
+        """
+        print(f"一括グラフ可視化を開始... レコード数: {len(explanation_records)}")
+        
+        results = []
+        os.makedirs(output_dir, exist_ok=True)
+        
+        for i, record in enumerate(explanation_records):
+            question = record.get('question', f"Question {i+1}")
+            answer = record.get('answer', '')
+            explanation = record.get('explanation', '')
+            
+            # ファイル名を生成（質問の先頭部分を使用）
+            question_prefix = question[:20].replace(" ", "_").replace("/", "_").replace("\\", "_")
+            filename = f"graph_{i+1}_{question_prefix}.png"
+            filepath = os.path.join(output_dir, filename)
+            
+            # グラフを生成して保存
+            result = self.visualize_explanation_as_graph(
+                explanation=explanation,
+                question=question,
+                answer=answer,
+                save_path=filepath,
+                return_base64=False  # ファイルとして保存するので、base64は不要
+            )
+            
+            # 結果にレコード情報を追加
+            result['question'] = question
+            result['answer'] = answer
+            result['record_id'] = record.get('id', i+1)
+            result['filename'] = filename
+            
+            results.append(result)
+            print(f"レコード {i+1}/{len(explanation_records)} を処理しました: {filepath}")
+        
+        print(f"一括グラフ可視化が完了しました。出力ディレクトリ: {output_dir}")
+        return results
