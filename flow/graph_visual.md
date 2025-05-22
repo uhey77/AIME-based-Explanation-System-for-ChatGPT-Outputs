@@ -1,0 +1,25 @@
+graph TD
+    A([main 開始]) --> B[設定: model_name_to_use, sample_text_to_process, window_size_for_cooccurrence];
+    B --> C[print: 使用モデル, 処理テキスト, ウィンドウサイズ];
+    C --> D[tokenizer = load_tokenizer(model_name_to_use)];
+    D --> E{tokenizer is None?};
+    E -- はい --> F[print: Tokenizerロード失敗メッセージ];
+    F --> Z([main 終了]);
+    E -- いいえ --> G[tokens_for_network = get_simple_tokens(sample_text_to_process, tokenizer)];
+    G --> H{tokens_for_network is empty?};
+    H -- はい --> I[print: トークン化結果空メッセージ];
+    I --> Z;
+    H -- いいえ --> J[print: サブワードトークン];
+    J --> K[cooc_counts = calculate_cooccurrence(tokens_for_network, window_size_for_cooccurrence)];
+    K --> L{cooc_counts is empty?};
+    L -- はい --> M[print: 共起ペアなしメッセージ];
+    M --> Z;
+    L -- いいえ --> N[print: 共起ペアと頻度];
+    N --> O[cooccurrence_graph = create_cooccurrence_graph(cooc_counts)];
+    O --> P{cooccurrence_graph.nodes() is empty?};
+    P -- はい --> Q[print: グラフノードなしメッセージ];
+    Q --> Z;
+    P -- いいえ --> R[print: グラフのノード数, エッジ数];
+    R --> S[graph_title を設定];
+    S --> T[visualize_network(cooccurrence_graph, title=graph_title)];
+    T --> Z;
