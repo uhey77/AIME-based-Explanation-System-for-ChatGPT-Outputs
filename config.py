@@ -17,7 +17,7 @@ load_environment()
 
 # --- 以下はデフォルト設定 ---
 DEFAULT_DOC_DIRECTORY = os.getenv("DOC_DIRECTORY", "knowledge_base")
-DEFAULT_MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
+DEFAULT_MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
 DEFAULT_DB_TYPE = os.getenv("DB_TYPE", "chroma")
